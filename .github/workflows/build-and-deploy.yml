@@ -66,11 +66,32 @@ jobs:
           az containerapp update \
             --name ${{ env.CONTAINER_APP_NAME }} \
             --resource-group ${{ env.AZURE_RESOURCE_GROUP_ACA }} \
-            --image ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            --image ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            --container-name angular-app
+          
+          echo "Waiting for revision to be ready..."
+          sleep 30
+          
+          # Get the latest revision name
+          LATEST_REVISION=$(az containerapp revision list \
+            --name ${{ env.CONTAINER_APP_NAME }} \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP_ACA }} \
+            --query "[0].name" -o tsv)
+          
+          echo "Latest revision: $LATEST_REVISION"
+          
+          # Restart the revision to ensure proper networking
+          az containerapp revision restart \
+            --name ${{ env.CONTAINER_APP_NAME }} \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP_ACA }} \
+            --revision $LATEST_REVISION
 
       - name: Get Container App URL
         id: get-url
         run: |
+          # Wait for app to be ready after restart
+          sleep 15
+          
           FQDN=$(az containerapp show \
             --name ${{ env.CONTAINER_APP_NAME }} \
             --resource-group ${{ env.AZURE_RESOURCE_GROUP_ACA }} \
