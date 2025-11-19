@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 env:
-  AZURE_RESOURCE_GROUP_ACR: rg-vnet-aca-demo
+  AZURE_RESOURCE_GROUP_ACR: rg-ace-aca-demo
   AZURE_RESOURCE_GROUP_ACA: rg-ace-aca-demo
   ACR_NAME: acracademo5462
   CONTAINER_APP_NAME: ca-aca-demo
