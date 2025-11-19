@@ -1,0 +1,70 @@
+name: Deploy Azure Infrastructure
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'bicep/**'
+  workflow_dispatch:
+
+env:
+  AZURE_LOCATION: eastus2
+
+jobs:
+  deploy-infrastructure:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure Login (Federated Identity)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy Bicep templates
+        run: |
+          az deployment sub create \
+            --name "aca-deployment-$(date +%Y%m%d-%H%M%S)" \
+            --location ${{ env.AZURE_LOCATION }} \
+            --template-file ./bicep/main.bicep \
+            --parameters ./bicep/main.bicepparam \
+            --parameters environmentName=prod
+
+      - name: Get Deployment Outputs
+        id: outputs
+        run: |
+          DEPLOYMENT_NAME=$(az deployment sub list \
+            --query "[?contains(name, 'aca-deployment')].name | [0]" \
+            --output tsv)
+          
+          ACR_NAME=$(az deployment sub show \
+            --name $DEPLOYMENT_NAME \
+            --query properties.outputs.acrName.value \
+            --output tsv)
+          
+          APP_FQDN=$(az deployment sub show \
+            --name $DEPLOYMENT_NAME \
+            --query properties.outputs.containerAppFQDN.value \
+            --output tsv)
+          
+          echo "acr_name=$ACR_NAME" >> $GITHUB_OUTPUT
+          echo "app_fqdn=$APP_FQDN" >> $GITHUB_OUTPUT
+
+      - name: Infrastructure Summary
+        run: |
+          echo "## ✅ Infrastructure Deployment Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Deployed Resources" >> $GITHUB_STEP_SUMMARY
+          echo "- **ACR**: \`${{ steps.outputs.outputs.acr_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Container App FQDN**: \`${{ steps.outputs.outputs.app_fqdn }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "1. Build and push Docker image to ACR" >> $GITHUB_STEP_SUMMARY
+          echo "2. Update Container App with the new image" >> $GITHUB_STEP_SUMMARY
